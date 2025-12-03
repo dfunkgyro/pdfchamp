@@ -6,6 +6,8 @@ import 'package:pdf_editor_macos/widgets/pdf_viewer_widget.dart';
 import 'package:pdf_editor_macos/widgets/recent_files_list.dart';
 import 'package:pdf_editor_macos/widgets/pdf_editor_panel.dart';
 import 'package:pdf_editor_macos/models/pdf_document.dart';
+import '../core/error/error_handler.dart';
+import '../core/logging/app_logger.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,6 +17,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static final AppLogger _logger = AppLogger('HomeScreen');
   String? _pdfPath;
   PDFDocument? _pdfDocument;
   final List<String> _recentFiles = [];
@@ -23,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _pickPDF() async {
     try {
+      _logger.info('User initiated file picker');
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['pdf'],
@@ -31,24 +35,36 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (result != null && result.files.single.path != null) {
         await _loadPDF(result.files.single.path!);
+      } else {
+        _logger.debug('User cancelled file picker');
       }
-    } catch (e) {
-      _showError('Error picking file: $e');
+    } catch (e, stackTrace) {
+      _logger.error('Error picking file', error: e, stackTrace: stackTrace);
+      final userMessage = ErrorHandler.handleError(e, stackTrace: stackTrace);
+      _showError(userMessage);
     }
   }
 
   Future<void> _loadPDF(String path) async {
     try {
+      _logger.info('Loading PDF', data: {'path': path});
+
+      // Verify file exists
+      final file = File(path);
+      if (!await file.exists()) {
+        throw Exception('File not found: $path');
+      }
+
       final pdfDoc = PDFDocument(
         path: path,
         fileName: path.split('/').last,
       );
-      
+
       setState(() {
         _pdfPath = path;
         _pdfDocument = pdfDoc;
         _isEditing = false;
-        
+
         if (!_recentFiles.contains(path)) {
           _recentFiles.insert(0, path);
           if (_recentFiles.length > 10) {
@@ -56,8 +72,12 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         }
       });
-    } catch (e) {
-      _showError('Error loading PDF: $e');
+
+      _logger.info('PDF loaded successfully', data: {'fileName': pdfDoc.fileName});
+    } catch (e, stackTrace) {
+      _logger.error('Error loading PDF', error: e, stackTrace: stackTrace);
+      final userMessage = ErrorHandler.handleError(e, stackTrace: stackTrace);
+      _showError(userMessage);
     }
   }
 
@@ -100,21 +120,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _savePDF() async {
     if (_pdfPath == null || _pdfDocument == null) return;
-    
+
     try {
+      _logger.info('User initiated PDF save');
       // Save edited PDF
       final savedPath = await FilePicker.platform.saveFile(
         dialogTitle: 'Save PDF As',
         fileName: 'edited_${_pdfDocument!.fileName}',
         allowedExtensions: ['pdf'],
       );
-      
+
       if (savedPath != null) {
         // Implement PDF saving logic
+        _logger.info('PDF saved successfully', data: {'path': savedPath});
         _showSuccess('PDF saved successfully!');
+      } else {
+        _logger.debug('User cancelled save operation');
       }
-    } catch (e) {
-      _showError('Error saving PDF: $e');
+    } catch (e, stackTrace) {
+      _logger.error('Error saving PDF', error: e, stackTrace: stackTrace);
+      final userMessage = ErrorHandler.handleError(e, stackTrace: stackTrace);
+      _showError(userMessage);
     }
   }
 

@@ -4,10 +4,15 @@ import 'dart:typed_data';
 import 'package:universal_charset_detector/universal_charset_detector.dart';
 import 'package:charset_converter/charset_converter.dart';
 import 'package:flutter/foundation.dart';
+import '../core/logging/app_logger.dart';
+import '../core/error/error_codes.dart';
+import '../core/exceptions/app_exceptions.dart';
 
 /// Handles text encoding conversion for PDF files
 /// Supports various PDF-specific encodings and character sets
 class TextEncodingHandler {
+  static final AppLogger _logger = AppLogger('TextEncodingHandler');
+
   // PDF-specific encoding mappings
   static final Map<String, String> _pdfEncodingMap = {
     // Standard PDF encodings
@@ -66,12 +71,18 @@ class TextEncodingHandler {
     try {
       final detector = UniversalCharsetDetector();
       final detected = await detector.detect(bytes);
-      
+
+      _logger.debug('Detected encoding: ${detected.name} with ${(detected.confidence * 100).toStringAsFixed(1)}% confidence');
+
       return DetectedEncoding(
         name: detected.name,
         confidence: detected.confidence,
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger.warning(
+        'Failed to detect encoding using UniversalCharsetDetector, falling back to BOM detection',
+        data: {'error': e.toString()},
+      );
       // Fallback: try to guess encoding from BOM
       return _guessEncodingFromBOM(bytes);
     }
@@ -83,62 +94,85 @@ class TextEncodingHandler {
       // Try to detect encoding
       final detected = await detectEncoding(bytes);
       final encodingName = detected.name.toLowerCase();
-      
+
       // Handle UTF encodings
-      if (encodingName.contains('utf-8') || 
+      if (encodingName.contains('utf-8') ||
           encodingName.contains('utf8') ||
           encodingName == 'ascii') {
         return utf8.decode(bytes, allowMalformed: true);
       }
-      
+
       if (encodingName.contains('utf-16')) {
         return _decodeUtf16(bytes, encodingName);
       }
-      
+
       if (encodingName.contains('utf-32')) {
         return _decodeUtf32(bytes);
       }
-      
+
       // Convert using charset_converter
       final result = await CharsetConverter.decode(bytes, detected.name);
       if (result != null) {
         return result;
       }
-      
+
       // Fallback to latin1
+      _logger.warning(
+        'Failed to decode with detected encoding ${detected.name}, falling back to latin1',
+        data: {'confidence': detected.confidence},
+      );
       return latin1.decode(bytes, allowInvalid: true);
-    } catch (e) {
+    } catch (e, stackTrace) {
       // Final fallback
+      _logger.error(
+        'Failed to decode bytes, using safe decode with potential data loss',
+        error: e,
+        stackTrace: stackTrace,
+      );
       return _safeDecode(bytes);
     }
   }
 
   /// Convert PDF-specific encoded text to UTF-8
   static Future<String> convertPdfTextToUtf8(
-    String text, 
+    String text,
     String pdfEncoding,
   ) async {
     if (pdfEncoding.isEmpty) {
       return text;
     }
-    
+
     final normalizedEncoding = _normalizeEncodingName(pdfEncoding);
-    
+
     // If already UTF-8, return as is
     if (normalizedEncoding.contains('utf-8')) {
       return text;
     }
-    
+
     try {
       // Convert to bytes using the source encoding
       final bytes = await CharsetConverter.encode(normalizedEncoding, text);
       if (bytes == null) {
+        _logger.warning(
+          'CharsetConverter returned null for encoding conversion',
+          data: {
+            'encoding': normalizedEncoding,
+            'originalEncoding': pdfEncoding,
+          },
+        );
         return text;
       }
-      
+
       // Decode as UTF-8
       return utf8.decode(bytes, allowMalformed: true);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger.warning(
+        'Failed to convert PDF text encoding, trying fallback',
+        data: {
+          'encoding': normalizedEncoding,
+          'error': e.toString(),
+        },
+      );
       // Try fallback conversion
       return _convertWithFallback(text, normalizedEncoding);
     }
@@ -146,29 +180,39 @@ class TextEncodingHandler {
 
   /// Convert PDF bytes with known encoding to string
   static Future<String> decodePdfBytes(
-    Uint8List bytes, 
+    Uint8List bytes,
     String pdfEncoding,
   ) async {
     final encodingName = _normalizeEncodingName(pdfEncoding);
-    
+
     try {
       if (encodingName.contains('utf-8')) {
         return utf8.decode(bytes, allowMalformed: true);
       }
-      
+
       if (encodingName.contains('utf-16')) {
         return _decodeUtf16(bytes, encodingName);
       }
-      
+
       // Use charset_converter for other encodings
       final result = await CharsetConverter.decode(bytes, encodingName);
       if (result != null) {
         return result;
       }
-      
+
       // Fallback: try to auto-detect
+      _logger.warning(
+        'CharsetConverter failed to decode, attempting auto-detection',
+        data: {'encoding': encodingName},
+      );
       return await bytesToUtf8(bytes);
-    } catch (e) {
+    } catch (e, stackTrace) {
+      _logger.error(
+        'Failed to decode PDF bytes, using safe decode',
+        error: e,
+        stackTrace: stackTrace,
+        data: {'encoding': encodingName},
+      );
       return _safeDecode(bytes);
     }
   }
@@ -398,9 +442,11 @@ class TextEncodingHandler {
     } catch (_) {
       try {
         // Try latin1
+        _logger.warning('UTF-8 decode failed, falling back to latin1');
         return latin1.decode(bytes, allowInvalid: true);
       } catch (_) {
         // Last resort: use replacement characters
+        _logger.error('All decode attempts failed, using replacement characters - data loss will occur');
         return String.fromCharCodes(
           bytes.map((b) => b < 32 || b > 126 ? 0xFFFD : b),
         );
