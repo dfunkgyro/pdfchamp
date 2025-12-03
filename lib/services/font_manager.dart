@@ -6,8 +6,12 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
+import '../core/logging/app_logger.dart';
+import '../core/error/error_codes.dart';
+import '../core/exceptions/app_exceptions.dart';
 
 class FontManager {
+  static final AppLogger _logger = AppLogger('FontManager');
   static final FontManager _instance = FontManager._internal();
   factory FontManager() => _instance;
   FontManager._internal();
@@ -75,13 +79,20 @@ class FontManager {
           final fontName = _extractFontName(bytes, file.path);
           if (fontName != null) {
             _fontCache[fontName] = bytes;
+            _logger.debug('Loaded font: $fontName from ${file.path}');
           }
-        } catch (e) {
-          print('Error loading font ${file.path}: $e');
+        } catch (e, stackTrace) {
+          _logger.warning(
+            'Failed to load font',
+            data: {'path': file.path, 'error': e.toString()},
+          );
         }
       }
-    } catch (e) {
-      print('Error reading font directory $directory: $e');
+    } catch (e, stackTrace) {
+      _logger.warning(
+        'Failed to read font directory',
+        data: {'directory': directory, 'error': e.toString()},
+      );
     }
   }
 
@@ -105,14 +116,27 @@ class FontManager {
       'Inter',
     ];
 
+    _logger.info('Loading common Google Fonts');
+    int loadedCount = 0;
+
     for (final font in commonFonts) {
       try {
         final fontLoader = GoogleFonts.getFont(font);
         await fontLoader.load();
-      } catch (e) {
-        print('Error loading Google Font $font: $e');
+        loadedCount++;
+        _logger.debug('Loaded Google Font: $font');
+      } catch (e, stackTrace) {
+        _logger.warning(
+          'Failed to load Google Font',
+          data: {'font': font, 'error': e.toString()},
+        );
       }
     }
+
+    _logger.info('Google Fonts loaded', data: {
+      'loaded': loadedCount,
+      'total': commonFonts.length,
+    });
   }
 
   Future<PDFFont?> getFontForEditing({
@@ -174,10 +198,19 @@ class FontManager {
     try {
       final file = File(fontPath);
       if (await file.exists()) {
-        return await file.readAsBytes();
+        final bytes = await file.readAsBytes();
+        _logger.debug('Loaded font file', data: {'path': fontPath});
+        return bytes;
+      } else {
+        _logger.warning('Font file not found', data: {'path': fontPath});
       }
-    } catch (e) {
-      print('Error loading font file $fontPath: $e');
+    } catch (e, stackTrace) {
+      _logger.error(
+        'Failed to load font file',
+        error: e,
+        stackTrace: stackTrace,
+        data: {'path': fontPath},
+      );
     }
     return null;
   }
