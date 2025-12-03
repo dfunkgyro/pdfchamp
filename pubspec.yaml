@@ -1,0 +1,156 @@
+name: pdf_editor_macos
+description: PDF Viewer & Editor with Font Support for macOS
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.13.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # UI & Theming
+  cupertino_icons: ^1.0.8
+  
+  # PDF Viewing & Rendering
+  syncfusion_flutter_pdfviewer: ^23.2.7
+  syncfusion_flutter_pdf: ^31.2.16
+  flutter_pdfview: ^1.4.3
+  pdfx: ^2.9.2
+  
+  # PDF Creation & Manipulation
+  pdf: ^3.11.3
+  pdf_text: ^2.0.7
+  printing: ^5.14.2
+  
+  # File Operations
+  file_picker: ^10.3.7
+  path_provider: ^2.1.5
+  open_filex: ^4.7.0
+  path: ^1.9.1
+  
+  # Fonts & Typography
+  google_fonts: ^6.3.3
+  font_awesome_flutter: ^10.12.0
+  
+  # Network & APIs
+  http: ^1.6.0
+  dio: ^5.9.0
+  
+  # Text Processing
+  pdf_text: ^0.5.0
+  charset_converter: ^2.3.0 
+  
+  # Utilities
+  overlay_support: ^2.1.0
+  uuid: ^4.5.2
+  intl: ^0.20.2
+  universal_io: ^2.3.1
+  provider: ^6.1.5+1
+  get_it: ^9.1.1
+  equatable: ^2.0.7
+  
+  # Platform Specific
+  permission_handler: ^12.0.1
+  macos_ui: ^2.2.2
+  
+  # Image Processing
+  image: ^4.5.4
+  image_picker: ^1.2.1
+  image_cropper: ^11.0.2
+  
+  # State Management & Architecture
+  flutter_bloc: ^9.1.1
+  hydrated_bloc: ^10.1.1
+  bloc: ^9.1.0
+  
+  # Localization
+  flutter_localizations:
+    sdk: flutter
+  
+  # Database
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  
+  # Animations
+  animations: ^2.1.1
+  
+  # Charting (for PDF analysis)
+  fl_chart: ^1.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  build_runner: ^2.10.4
+  hive_generator: ^2.0.1
+  mockito: ^5.6.1
+  bloc_test: ^10.0.0
+  integration_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  generate: true
+  
+  assets:
+    - assets/fonts/
+    - assets/images/
+    - assets/pdf_templates/
+  
+  fonts:
+    - family: SF Pro Display
+      fonts:
+        - asset: assets/fonts/SF-Pro-Display-Regular.otf
+          weight: 400
+        - asset: assets/fonts/SF-Pro-Display-Medium.otf
+          weight: 500
+        - asset: assets/fonts/SF-Pro-Display-Semibold.otf
+          weight: 600
+        - asset: assets/fonts/SF-Pro-Display-Bold.otf
+          weight: 700
+    
+    - family: SF Mono
+      fonts:
+        - asset: assets/fonts/SF-Mono-Regular.otf
+        - asset: assets/fonts/SF-Mono-Medium.otf
+          weight: 500
+        - asset: assets/fonts/SF-Mono-Semibold.otf
+          weight: 600
+    
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+
+# Platform-specific configurations
+platforms:
+  macos:
+    minimumOsVersion: '10.11'
+    
+# Enable macOS desktop features
+flutter_intl:
+  enabled: true
+  main_locale: en
+  arb_dir: lib/l10n
+  synthetic_package: true
+
+# For internationalization
+flutter_localizations:
+  supportedLocales:
+    - en
+    - es
+    - fr
+    - de
+    - ja
+    - zh
+    - ar
+    - ru
+  uses-material-design: true
