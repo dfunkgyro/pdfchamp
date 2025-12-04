@@ -3,6 +3,7 @@ import '../../config/app_config.dart';
 import '../../logging/app_logger.dart';
 import '../../error/error_codes.dart';
 import '../../exceptions/app_exceptions.dart';
+import 'ai_prompts.dart';
 
 /// OpenAI AI Assistant Service
 /// Provides AI-powered features for PDF analysis and user assistance
@@ -72,9 +73,7 @@ class OpenAIService {
           role: OpenAIChatMessageRole.system,
           content: [
             OpenAIChatCompletionChoiceMessageContentItemModel.text(
-              systemPrompt ??
-                  'You are ${AppConfig.aiAssistantName}, a helpful AI assistant specialized in PDF document analysis, editing, and management. '
-                      'Provide clear, concise, and accurate assistance to users.',
+              systemPrompt ?? AIPrompts.pdfAssistantBase,
             ),
           ],
         ),
@@ -137,19 +136,23 @@ class OpenAIService {
   static Future<String> summarizePdfContent({
     required String content,
     int? maxLength,
+    String? focus,
+    bool includeTechnical = true,
   }) async {
     final prompt = '''
-Please provide a concise summary of the following PDF content.
-${maxLength != null ? 'Keep the summary under $maxLength words.' : ''}
+Please provide a comprehensive summary of the following PDF content.
 
-Content:
+PDF Content:
 $content
 ''';
 
     return chat(
       message: prompt,
-      systemPrompt:
-          'You are a document summarization expert. Provide clear, accurate summaries that capture the main points.',
+      systemPrompt: AIPrompts.buildSummarizationPrompt(
+        maxWords: maxLength,
+        focus: focus,
+        includeTechnical: includeTechnical,
+      ),
     );
   }
 
@@ -157,74 +160,87 @@ $content
   static Future<Map<String, dynamic>> extractKeyInfo({
     required String content,
     List<String>? fieldsToExtract,
+    String? documentType,
   }) async {
-    final fields = fieldsToExtract?.join(', ') ?? 'all relevant information';
+    final fields = fieldsToExtract ?? [
+      'Names',
+      'Dates',
+      'Important Numbers',
+      'Email Addresses',
+      'Phone Numbers',
+      'Addresses',
+      'Key Terms',
+      'Action Items',
+    ];
 
     final prompt = '''
-Extract the following information from this PDF content: $fields
+Extract the requested information from the following PDF content.
 
-Return the information in a structured format.
-
-Content:
+PDF Content:
 $content
 ''';
 
     final response = await chat(
       message: prompt,
-      systemPrompt:
-          'You are a data extraction expert. Extract information accurately and return it in a clear, structured format.',
+      systemPrompt: AIPrompts.buildExtractionPrompt(
+        fieldsToExtract: fields,
+        documentType: documentType,
+      ),
     );
 
     // Parse response into structured data
-    return {'extracted_text': response};
+    return {
+      'extracted_data': response,
+      'timestamp': DateTime.now().toIso8601String(),
+      'fields_requested': fields,
+    };
   }
 
   /// Translate PDF content
   static Future<String> translateContent({
     required String content,
     required String targetLanguage,
+    String? sourceLanguage,
   }) async {
     final prompt = '''
 Translate the following PDF content to $targetLanguage.
-Maintain the original formatting and structure as much as possible.
+${sourceLanguage != null ? 'Source language: $sourceLanguage' : ''}
 
-Content:
+PDF Content:
 $content
 ''';
 
     return chat(
       message: prompt,
-      systemPrompt:
-          'You are a professional translator. Provide accurate translations while preserving formatting.',
+      systemPrompt: AIPrompts.translationPrompt,
     );
   }
 
   /// Analyze PDF document
   static Future<Map<String, dynamic>> analyzeDocument({
     required String content,
-    List<String>? analysisTypes,
+    List<String>? focusAreas,
+    String? perspective,
   }) async {
-    final types = analysisTypes?.join(', ') ??
-        'content structure, key topics, sentiment, readability';
-
     final prompt = '''
-Perform a comprehensive analysis of this PDF document, focusing on: $types
+Perform a comprehensive analysis of the following PDF document.
 
-Provide insights and recommendations.
-
-Content:
+PDF Content:
 $content
 ''';
 
     final response = await chat(
       message: prompt,
-      systemPrompt:
-          'You are a document analysis expert. Provide thorough, actionable insights.',
+      systemPrompt: AIPrompts.buildAnalysisPrompt(
+        focusAreas: focusAreas,
+        perspective: perspective,
+      ),
     );
 
     return {
       'analysis': response,
       'timestamp': DateTime.now().toIso8601String(),
+      'focus_areas': focusAreas,
     };
   }
 
@@ -232,10 +248,10 @@ $content
   static Future<String> answerQuestion({
     required String question,
     required String pdfContent,
+    String? documentType,
+    String? userRole,
   }) async {
     final prompt = '''
-Based on the following PDF content, please answer this question:
-
 Question: $question
 
 PDF Content:
@@ -244,9 +260,10 @@ $pdfContent
 
     return chat(
       message: prompt,
-      systemPrompt:
-          'You are a helpful assistant answering questions about PDF documents. '
-              'Provide accurate, relevant answers based only on the provided content.',
+      systemPrompt: AIPrompts.buildQAPrompt(
+        documentType: documentType,
+        userRole: userRole,
+      ),
     );
   }
 
@@ -273,6 +290,56 @@ $content
 
     // Parse response into list of suggestions
     return response.split('\n').where((line) => line.trim().isNotEmpty).toList();
+  }
+
+  /// Assist with form filling
+  static Future<Map<String, dynamic>> assistFormFilling({
+    required String formFieldName,
+    String? fieldContext,
+    String? userInfo,
+  }) async {
+    final prompt = '''
+Help fill out this form field:
+
+Field Name: $formFieldName
+${fieldContext != null ? 'Field Context: $fieldContext' : ''}
+${userInfo != null ? 'User Information: $userInfo' : ''}
+
+Provide guidance on how to fill this field correctly.
+''';
+
+    final response = await chat(
+      message: prompt,
+      systemPrompt: AIPrompts.formFillingPrompt,
+    );
+
+    return {
+      'field_name': formFieldName,
+      'guidance': response,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
+  }
+
+  /// Extract data for auto-filling forms
+  static Future<Map<String, dynamic>> extractForAutoFill({
+    required String content,
+  }) async {
+    final prompt = '''
+Extract all personal, business, and financial information from this document that could be used to auto-fill forms.
+
+Document Content:
+$content
+''';
+
+    final response = await chat(
+      message: prompt,
+      systemPrompt: AIPrompts.autoFillPrompt,
+    );
+
+    return {
+      'extracted_data': response,
+      'timestamp': DateTime.now().toIso8601String(),
+    };
   }
 
   /// Stream chat responses (for real-time interaction)

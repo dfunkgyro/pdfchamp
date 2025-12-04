@@ -11,6 +11,8 @@ import '../core/theme/app_theme_constants.dart';
 import '../widgets/panels/top_panel.dart';
 import '../widgets/panels/left_sidebar.dart';
 import '../widgets/panels/right_sidebar.dart';
+import '../widgets/pdf/pdf_viewer_widget.dart';
+import '../widgets/pdf/pdf_tools_widget.dart';
 import '../models/pdf_document.dart';
 
 /// Enhanced home screen with toggleable panels and modern UI
@@ -37,6 +39,14 @@ class _EnhancedHomeScreenState extends State<EnhancedHomeScreen>
   bool _isLoading = false;
   int _currentPage = 1;
   int _totalPages = 0;
+
+  // PDF Tools State
+  PdfTool _selectedTool = PdfTool.select;
+  Color _selectedColor = AppColors.warning;
+  double _toolThickness = 2.0;
+
+  // PDF Viewer Controller
+  final GlobalKey<PdfViewerWidgetState> _pdfViewerKey = GlobalKey();
 
   // Animation Controllers
   late AnimationController _fadeController;
@@ -249,16 +259,49 @@ class _EnhancedHomeScreenState extends State<EnhancedHomeScreen>
   }
 
   Widget _buildPDFViewer(BuildContext context) {
-    // Placeholder for actual PDF viewer
-    // In production, this would use the syncfusion_flutter_pdfviewer or similar
-    return Container(
-      color: AppColors.grey200,
-      child: Center(
-        child: Text(
-          'PDF Viewer: ${_pdfDocument?.fileName}',
-          style: Theme.of(context).textTheme.titleLarge,
+    return Stack(
+      children: [
+        // Actual PDF Viewer
+        PdfViewerWidget(
+          key: _pdfViewerKey,
+          pdfPath: _pdfPath!,
+          isEditing: _isEditing,
+          onPageChanged: (int page, int total) {
+            setState(() {
+              _currentPage = page;
+              _totalPages = total;
+            });
+          },
+          onDocumentLoaded: (int pageCount) {
+            setState(() {
+              _totalPages = pageCount;
+            });
+            _logger.info('PDF loaded with $pageCount pages');
+          },
         ),
-      ),
+
+        // PDF Tools Panel (shown when editing)
+        if (_isEditing)
+          Positioned(
+            top: AppSpacing.md,
+            left: AppSpacing.md,
+            child: PdfToolsWidget(
+              isEditing: _isEditing,
+              onToolSelected: (tool) {
+                setState(() => _selectedTool = tool);
+                _logger.debug('Tool selected: $tool');
+              },
+              onColorSelected: (color) {
+                setState(() => _selectedColor = color);
+                _logger.debug('Color selected: $color');
+              },
+              onThicknessChanged: (thickness) {
+                setState(() => _toolThickness = thickness);
+                _logger.debug('Thickness changed: $thickness');
+              },
+            ),
+          ),
+      ],
     );
   }
 
